@@ -23,6 +23,16 @@ import plotly.graph_objects as go
 import plotly.express as px
 import streamlit as st
 
+import streamlit as st
+import os
+
+# Load secrets from Streamlit Cloud or fall back to .env
+try:
+    os.environ["ANTHROPIC_API_KEY"] = st.secrets["ANTHROPIC_API_KEY"]
+    os.environ["FRED_API_KEY"] = st.secrets["FRED_API_KEY"]
+except Exception:
+    pass  # Falls back to .env file when running locally
+    
 # ── Page config ───────────────────────────────
 st.set_page_config(
     page_title="Stock Analysis Bot",
