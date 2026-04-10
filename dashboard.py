@@ -12,20 +12,8 @@ Run with:
 
 DISCLAIMER: For educational/portfolio purposes only. Not financial advice.
 """
-
-import json
-import glob
-from pathlib import Path
-from datetime import datetime
-
-import pandas as pd
-import plotly.graph_objects as go
-import plotly.express as px
-import streamlit as st
-
 import streamlit as st
 import os
-
 # Load secrets from Streamlit Cloud or fall back to .env
 try:
     os.environ["ANTHROPIC_API_KEY"] = st.secrets["ANTHROPIC_API_KEY"]
@@ -41,6 +29,18 @@ st.set_page_config(
 )
 
 REPORTS_DIR = Path("reports")
+
+import json
+import glob
+from pathlib import Path
+from datetime import datetime
+
+import pandas as pd
+import plotly.graph_objects as go
+import plotly.express as px
+
+
+
 
 # ── Helpers ───────────────────────────────────
 
