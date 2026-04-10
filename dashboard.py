@@ -21,14 +21,8 @@ try:
 except Exception:
     pass  # Falls back to .env file when running locally
     
-# ── Page config ───────────────────────────────
-st.set_page_config(
-    page_title="Stock Analysis Bot",
-    page_icon="📈",
-    layout="wide",
-)
 
-REPORTS_DIR = Path("reports")
+
 
 import json
 import glob
@@ -39,8 +33,13 @@ import pandas as pd
 import plotly.graph_objects as go
 import plotly.express as px
 
-
-
+# ── Page config ───────────────────────────────
+st.set_page_config(
+    page_title="Stock Analysis Bot",
+    page_icon="📈",
+    layout="wide",
+)
+REPORTS_DIR = Path("reports")
 
 # ── Helpers ───────────────────────────────────
 
