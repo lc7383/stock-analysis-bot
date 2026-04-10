@@ -1,0 +1,10 @@
+yfinance
+pandas
+ta
+requests
+python-dotenv
+anthropic
+schedule
+streamlit
+plotly
+fredapi
