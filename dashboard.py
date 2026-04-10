@@ -18,8 +18,9 @@ import os
 try:
     os.environ["ANTHROPIC_API_KEY"] = st.secrets["ANTHROPIC_API_KEY"]
     os.environ["FRED_API_KEY"] = st.secrets["FRED_API_KEY"]
-except Exception:
-    pass  # Falls back to .env file when running locally
+    st.sidebar.success("✓ Secrets loaded OK")
+except Exception as e:
+    st.sidebar.error(f"Secrets error: {e}")
     
 
 
