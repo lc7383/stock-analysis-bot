@@ -26,7 +26,9 @@ load_dotenv()
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger(__name__)
 
-client = anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
+def get_client():
+    api_key = os.getenv("ANTHROPIC_API_KEY")
+    return anthropic.Anthropic(api_key=api_key)
 MODEL  = "claude-sonnet-4-6"
 
 
@@ -118,7 +120,7 @@ def analyze_stocks(summaries: list[dict], macro: dict, insider: dict) -> dict:
     logger.info(f"Sending {len(summaries)} tickers + macro + insider data to Claude...")
 
     try:
-        response = client.messages.create(
+        response = get_client().messages.create(
             model=MODEL,
             max_tokens=4000,
             system=SYSTEM_PROMPT,
