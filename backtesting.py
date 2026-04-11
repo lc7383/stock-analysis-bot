@@ -90,7 +90,7 @@ def generate_signals(df: pd.DataFrame) -> pd.Series:
     signals[sell_condition] = "SELL"
 
     # Don't generate signals before indicators are ready (first 50 days)
-    warmup = min(50, len(df) - 1)
+    warmup = min(20, len(df) - 1)
     signals.iloc[:warmup] = "HOLD"
 
     return signals
