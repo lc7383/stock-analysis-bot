@@ -8,3 +8,4 @@ schedule
 streamlit
 plotly
 fredapi
+numpy
