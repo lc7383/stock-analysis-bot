@@ -96,10 +96,13 @@ page = st.sidebar.radio("View", ["Latest Report", "History", "Run Analysis"])
 if page == "Latest Report":
     st.title("Latest Analysis")
 
+    if "latest_analysis" in st.session_state:
+    report = st.session_state["latest_analysis"]
+elif load_latest_report():
     report = load_latest_report()
-    if not report:
-        st.warning("No reports found. Run the scheduler or analysis agent first.")
-        st.stop()
+else:
+    st.warning("No reports found. Run the scheduler or analysis agent first.")
+    st.stop()
 
     # Header
     date_str = report.get("analysis_date", "Unknown date")
