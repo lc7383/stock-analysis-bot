@@ -188,9 +188,9 @@ def save_report(analysis: dict, filepath: str = "report.json") -> None:
     logger.info(f"Report saved to {filepath}")
 
 
-def run_pipeline(tickers: list[str] = DEFAULT_WATCHLIST, save_json: bool = True) -> dict:
+def run_pipeline(tickers: list[str] = DEFAULT_WATCHLIST, save_json: bool = True, period: str = "6mo") -> dict:
     print(f"\nCollecting stock data for: {', '.join(tickers)}")
-    watchlist_data = collect_watchlist(tickers, include_news=False)
+    watchlist_data = collect_watchlist(tickers, include_news=False, period=period)
     summaries      = summaries_for_claude(watchlist_data)
 
     print("Fetching macro & sentiment context...")
