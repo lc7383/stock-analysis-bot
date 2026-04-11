@@ -270,15 +270,13 @@ elif page == "Backtest":
     with col2:
         bt_period = st.selectbox(
     "Period",
-    options=["1wk", "1mo", "2mo", "3mo", "6mo", "1y", "2y", "3y", "5y"],
+    options=["3mo", "6mo", "1y", "18mo", "2y", "3y", "5y"],
     index=3,
     format_func=lambda x: {
-        "1wk": "1 week",
-        "1mo": "1 month",
-        "2mo": "2 months",
         "3mo": "3 months",
         "6mo": "6 months",
         "1y":  "1 year",
+        "18mo":  "18 months",
         "2y":  "2 years",
         "3y":  "3 years",
         "5y":  "5 years",
