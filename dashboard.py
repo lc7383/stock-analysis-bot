@@ -269,11 +269,20 @@ elif page == "Backtest":
         bt_tickers = st.text_input("Tickers", value=", ".join(st.session_state["watchlist"]))
     with col2:
         bt_period = st.selectbox(
-            "Period",
-            options=["6mo", "1y", "2y"],
-            index=1,
-            format_func=lambda x: {"6mo": "6 months", "1y": "1 year", "2y": "2 years"}[x]
-        )
+    "Period",
+    options=["1wk", "1mo", "3mo", "6mo", "1y", "2y", "3y", "5y"],
+    index=3,
+    format_func=lambda x: {
+        "1wk": "1 week",
+        "1mo": "1 month",
+        "3mo": "3 months",
+        "6mo": "6 months",
+        "1y":  "1 year",
+        "2y":  "2 years",
+        "3y":  "3 years",
+        "5y":  "5 years",
+    }[x]
+)
     with col3:
         bt_cash = st.number_input("Starting cash ($)", value=10000, step=1000, min_value=1000)
 
