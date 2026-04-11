@@ -229,15 +229,15 @@ elif page == "Run Analysis":
         if not tickers:
             st.error("Please enter at least one ticker.")
         else:
-            with st.spinner(f"Collecting data and analyzing {', '.join(tickers)}..."):
+            with st.spinner(f"Analyzing {', '.join(tickers)}... this may take 2-3 minutes"):
                 try:
-                    from scheduler import run_and_save
                     from analysis_agent import run_pipeline
-                    analysis = run_pipeline(tickers, save_json=True)
+                    analysis = run_pipeline(tickers, save_json=False)
                     if "error" in analysis:
                         st.error(f"Analysis failed: {analysis['error']}")
                     else:
-                        st.success("Analysis complete! View results in Latest Report.")
+                        st.session_state["latest_analysis"] = analysis
+                        st.success("✅ Analysis complete!")
                         st.json(analysis)
                 except Exception as e:
                     st.error(f"Error: {e}")
