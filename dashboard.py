@@ -19,12 +19,6 @@ try:
         os.environ["ALERT_TO_EMAIL"]       = st.secrets.get("ALERT_TO_EMAIL", st.secrets["ALERT_EMAIL"])
 except Exception:
     pass
-# Load .env file for local development
-from dotenv import load_dotenv
-load_dotenv()
-
-# Debug — remove after testing
-st.sidebar.write("ALERT_EMAIL:", os.getenv("ALERT_EMAIL"))
 
 from pathlib import Path
 import json
@@ -94,7 +88,7 @@ st.sidebar.title("📈 Stock Analysis Bot")
 st.sidebar.caption("⚠️ Educational use only. Not financial advice.")
 st.sidebar.divider()
 
-page = st.sidebar.radio("View", ["Latest Report", "History", "Run Analysis", "Watchlist & Alerts"])
+page = st.sidebar.radio("View", ["Latest Report", "History", "Run Analysis", "Backtest", "Watchlist & Alerts"])
 
 
 # ── Latest Report ─────────────────────────────
@@ -212,22 +206,9 @@ elif page == "Run Analysis":
     watchlist_str = ", ".join(st.session_state["watchlist"])
     tickers_input = st.text_input("Watchlist (comma separated)", value=watchlist_str)
 
-    col1, col2, col3 = st.columns([2, 2, 2])
+    col1, col2 = st.columns([1, 3])
     with col1:
         save_watchlist = st.checkbox("Save as my watchlist", value=True)
-    with col2:
-        period = st.selectbox(
-            "Date range",
-            options=["1mo", "3mo", "6mo", "1y", "ytd"],
-            index=2,
-            format_func=lambda x: {
-                "1mo": "1 month",
-                "3mo": "3 months",
-                "6mo": "6 months",
-                "1y":  "1 year",
-                "ytd": "Year to date",
-            }[x]
-        )
 
     if st.button("▶  Run Analysis", type="primary"):
         tickers = [t.strip().upper() for t in tickers_input.split(",") if t.strip()]
@@ -241,7 +222,7 @@ elif page == "Run Analysis":
             with st.spinner(f"Analyzing {', '.join(tickers)}... this may take 2-3 minutes"):
                 try:
                     from analysis_agent import run_pipeline
-                    analysis = run_pipeline(tickers, save_json=False, period=period)
+                    analysis = run_pipeline(tickers, save_json=False)
 
                     if "error" in analysis:
                         st.error(f"Analysis failed: {analysis['error']}")
@@ -276,6 +257,120 @@ elif page == "Run Analysis":
                     st.error(f"Error: {e}")
                     import traceback
                     st.code(traceback.format_exc())
+
+
+# ── Backtest ──────────────────────────────────
+elif page == "Backtest":
+    st.title("Strategy Backtesting")
+    st.caption("⚠️ Past performance does not guarantee future results. Educational use only.")
+
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        bt_tickers = st.text_input("Tickers", value=", ".join(st.session_state["watchlist"]))
+    with col2:
+        bt_period = st.selectbox(
+            "Period",
+            options=["6mo", "1y", "2y"],
+            index=1,
+            format_func=lambda x: {"6mo": "6 months", "1y": "1 year", "2y": "2 years"}[x]
+        )
+    with col3:
+        bt_cash = st.number_input("Starting cash ($)", value=10000, step=1000, min_value=1000)
+
+    if st.button("▶  Run Backtest", type="primary"):
+        tickers = [t.strip().upper() for t in bt_tickers.split(",") if t.strip()]
+        if not tickers:
+            st.error("Please enter at least one ticker.")
+        else:
+            with st.spinner(f"Backtesting {', '.join(tickers)} over {bt_period}..."):
+                try:
+                    from backtesting import backtest_watchlist, backtest_summary
+
+                    results = backtest_watchlist(tickers, period=bt_period, starting_cash=float(bt_cash))
+                    summary = backtest_summary(results)
+
+                    if "error" in summary:
+                        st.error(summary["error"])
+                    else:
+                        st.session_state["backtest_results"] = results
+                        st.session_state["backtest_summary"] = summary
+
+                except Exception as e:
+                    st.error(f"Backtest failed: {e}")
+                    import traceback
+                    st.code(traceback.format_exc())
+
+    # Display results if available
+    if "backtest_results" in st.session_state:
+        results = st.session_state["backtest_results"]
+        summary = st.session_state["backtest_summary"]
+
+        # Summary metrics
+        st.divider()
+        st.subheader("Summary")
+        m1, m2, m3, m4 = st.columns(4)
+        m1.metric("Avg Strategy Return", f"{summary['avg_strategy_return']:+.1f}%")
+        m2.metric("Avg Buy & Hold Return", f"{summary['avg_bah_return']:+.1f}%")
+        m3.metric("Avg Alpha", f"{summary['avg_alpha']:+.1f}%")
+        m4.metric("Beat Buy & Hold", f"{summary['outperformed_count']}/{summary['tickers_tested']}")
+
+        # Per stock results table
+        st.divider()
+        st.subheader("Results by Stock")
+        table_data = []
+        for ticker, r in results.items():
+            if "error" not in r:
+                table_data.append({
+                    "Ticker":           ticker,
+                    "Strategy Return":  f"{r['total_return_pct']:+.1f}%",
+                    "Buy & Hold":       f"{r['buy_and_hold_return']:+.1f}%",
+                    "Alpha":            f"{r['alpha']:+.1f}%",
+                    "Trades":           r["num_trades"],
+                    "Win Rate":         f"{r['win_rate']}%",
+                    "Max Drawdown":     f"{r['max_drawdown']}%",
+                    "Sharpe Ratio":     r["sharpe_ratio"],
+                    "Beat B&H":         "✓" if r["outperformed"] else "✗",
+                })
+        if table_data:
+            st.dataframe(pd.DataFrame(table_data), use_container_width=True)
+
+        # Portfolio value chart
+        st.divider()
+        st.subheader("Portfolio Value Over Time")
+        fig = go.Figure()
+        for ticker, r in results.items():
+            if "error" not in r and r.get("portfolio_history"):
+                hist = pd.DataFrame(r["portfolio_history"])
+                hist["date"] = pd.to_datetime(hist["date"])
+                fig.add_trace(go.Scatter(
+                    x=hist["date"],
+                    y=hist["portfolio_value"],
+                    name=f"{ticker} Strategy",
+                    mode="lines",
+                ))
+        fig.update_layout(
+            yaxis_title="Portfolio Value ($)",
+            xaxis_title="Date",
+            plot_bgcolor="rgba(0,0,0,0)",
+            paper_bgcolor="rgba(0,0,0,0)",
+            height=400,
+            hovermode="x unified",
+        )
+        st.plotly_chart(fig, use_container_width=True)
+
+        # Trade history
+        st.divider()
+        st.subheader("Trade History")
+        ticker_select = st.selectbox("Select ticker", list(results.keys()))
+        if ticker_select and "error" not in results[ticker_select]:
+            trades_df = pd.DataFrame(results[ticker_select]["trades"])
+            if not trades_df.empty:
+                trades_df["date"] = pd.to_datetime(trades_df["date"]).dt.strftime("%Y-%m-%d")
+                st.dataframe(trades_df, use_container_width=True)
+                csv = trades_df.to_csv(index=False)
+                st.download_button(f"Download {ticker_select} trades CSV", csv, f"{ticker_select}_trades.csv", "text/csv")
+            else:
+                st.info("No trades were executed for this ticker.")
 
 
 # ── Watchlist & Alerts ────────────────────────
