@@ -241,7 +241,7 @@ elif page == "Run Analysis":
             with st.spinner(f"Analyzing {', '.join(tickers)}... this may take 2-3 minutes"):
                 try:
                     from analysis_agent import run_pipeline
-                    analysis = run_pipeline(tickers, save_json=False)
+                    analysis = run_pipeline(tickers, save_json=False, period=period)
 
                     if "error" in analysis:
                         st.error(f"Analysis failed: {analysis['error']}")
