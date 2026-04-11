@@ -90,7 +90,8 @@ def generate_signals(df: pd.DataFrame) -> pd.Series:
     signals[sell_condition] = "SELL"
 
     # Don't generate signals before indicators are ready (first 50 days)
-    signals.iloc[:50] = "HOLD"
+    warmup = min(50, len(df) - 1)
+    signals.iloc[:warmup] = "HOLD"
 
     return signals
 
@@ -191,7 +192,8 @@ def backtest_ticker(
     # Final portfolio value (liquidate remaining shares)
     final_price          = float(df["Close"].iloc[-1])
     final_portfolio_value = cash + shares * final_price
-    start_price          = float(df["Close"].iloc[50])  # after indicators ready
+    valid_idx = min(50, len(df) - 1)
+    start_price = float(df["Close"].iloc[valid_idx])
     end_price            = final_price
 
     # ── Buy and hold comparison ───────────────
