@@ -231,13 +231,19 @@ elif page == "Run Analysis":
         else:
             with st.spinner(f"Analyzing {', '.join(tickers)}... this may take 2-3 minutes"):
                 try:
-                    from analysis_agent import run_pipeline
-                    analysis = run_pipeline(tickers, save_json=False)
-                    if "error" in analysis:
-                        st.error(f"Analysis failed: {analysis['error']}")
-                    else:
-                        st.session_state["latest_analysis"] = analysis
-                        st.success("✅ Analysis complete!")
-                        st.json(analysis)
-                except Exception as e:
-                    st.error(f"Error: {e}")
+                    st.write("Step 1: Importing analysis agent...")
+        from analysis_agent import run_pipeline
+        st.write("Step 2: Running pipeline...")
+        analysis = run_pipeline(tickers, save_json=False)
+        st.write(f"Step 3: Got result: {analysis.keys() if analysis else 'None'}")
+        if "error" in analysis:
+            st.error(f"Analysis failed: {analysis['error']}")
+        else:
+            st.session_state["latest_analysis"] = analysis
+            st.success("✅ Analysis complete!")
+            st.json(analysis)
+    except Exception as e:
+        st.error(f"Error: {e}")
+        import traceback
+        st.code(traceback.format_exc())
+
