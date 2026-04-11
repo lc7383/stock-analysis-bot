@@ -275,6 +275,7 @@ elif page == "Backtest":
     format_func=lambda x: {
         "1wk": "1 week",
         "1mo": "1 month",
+        "2mo": "2 months",
         "3mo": "3 months",
         "6mo": "6 months",
         "1y":  "1 year",
