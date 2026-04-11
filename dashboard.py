@@ -212,9 +212,22 @@ elif page == "Run Analysis":
     watchlist_str = ", ".join(st.session_state["watchlist"])
     tickers_input = st.text_input("Watchlist (comma separated)", value=watchlist_str)
 
-    col1, col2 = st.columns([1, 3])
+    col1, col2, col3 = st.columns([2, 2, 2])
     with col1:
         save_watchlist = st.checkbox("Save as my watchlist", value=True)
+    with col2:
+        period = st.selectbox(
+            "Date range",
+            options=["1mo", "3mo", "6mo", "1y", "ytd"],
+            index=2,
+            format_func=lambda x: {
+                "1mo": "1 month",
+                "3mo": "3 months",
+                "6mo": "6 months",
+                "1y":  "1 year",
+                "ytd": "Year to date",
+            }[x]
+        )
 
     if st.button("▶  Run Analysis", type="primary"):
         tickers = [t.strip().upper() for t in tickers_input.split(",") if t.strip()]
