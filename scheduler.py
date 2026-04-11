@@ -27,6 +27,7 @@ logger = logging.getLogger(__name__)
 WATCHLIST      = ["AAPL", "MSFT", "NVDA", "AMZN", "GOOGL","MAR","VRTX","CSZIX"]
 REPORTS_DIR    = Path("reports")
 RUN_TIME_DAILY = "09:00"   # 24-hour format, runs once per day at market open
+ANALYSIS_PERIOD = "3mo"   # Change this to adjust the date range
 # ─────────────────────────────────────────────
 
 
@@ -35,7 +36,7 @@ def run_and_save():
     REPORTS_DIR.mkdir(exist_ok=True)
     logger.info(f"Scheduled run starting — {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
 
-    analysis = run_pipeline(WATCHLIST, save_json=False)
+    analysis = run_pipeline(WATCHLIST, save_json=False, period=ANALYSIS_PERIOD)
 
     if "error" in analysis:
         logger.error(f"Run failed: {analysis['error']}")
