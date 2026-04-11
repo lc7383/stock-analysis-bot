@@ -19,6 +19,12 @@ try:
         os.environ["ALERT_TO_EMAIL"]       = st.secrets.get("ALERT_TO_EMAIL", st.secrets["ALERT_EMAIL"])
 except Exception:
     pass
+# Load .env file for local development
+from dotenv import load_dotenv
+load_dotenv()
+
+# Debug — remove after testing
+st.sidebar.write("ALERT_EMAIL:", os.getenv("ALERT_EMAIL"))
 
 from pathlib import Path
 import json

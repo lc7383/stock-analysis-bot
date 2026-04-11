@@ -156,13 +156,14 @@ def send_alert_email(triggered: list[dict], analysis: dict) -> bool:
     msg.attach(MIMEText(build_email_html(triggered, analysis), "html"))
 
     try:
-        with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
+        with smtplib.SMTP("smtp.mail.me.com", 587) as server:
+            server.starttls()
             server.login(ALERT_EMAIL, ALERT_EMAIL_PASSWORD)
             server.sendmail(ALERT_EMAIL, ALERT_TO_EMAIL, msg.as_string())
         logger.info(f"Alert email sent for: {tickers}")
         return True
     except smtplib.SMTPAuthenticationError:
-        logger.error("Email authentication failed — check your Gmail App Password")
+        logger.error("Email authentication failed — check your credentials")
         return False
     except Exception as e:
         logger.error(f"Failed to send alert email: {e}")
