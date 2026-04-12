@@ -132,8 +132,9 @@ def build_features_rf(df: pd.DataFrame) -> pd.DataFrame:
     features["vol_trend"]    = volume.pct_change(5)
 
     # ── 52-week high/low distance ─────────────
-    high_52w               = close.rolling(252).max()
-    low_52w                = close.rolling(252).min()
+    window_52w             = min(252, len(close))
+    high_52w               = close.rolling(window_52w).max()
+    low_52w                = close.rolling(window_52w).min()
     features["dist_52w_high"] = (close - high_52w) / high_52w.replace(0, np.nan)
     features["dist_52w_low"]  = (close - low_52w)  / low_52w.replace(0, np.nan)
 
@@ -148,7 +149,6 @@ def build_features_rf(df: pd.DataFrame) -> pd.DataFrame:
             features[f"{col}_lag2"] = features[col].shift(2)
 
     # ── RSI divergence ────────────────────────
-    # Price making new highs but RSI not = bearish divergence
     if "rsi_norm" in features.columns:
         price_higher = (close > close.shift(5)).astype(int)
         rsi_higher   = (features["rsi_norm"] > features["rsi_norm"].shift(5)).astype(int)
@@ -157,8 +157,9 @@ def build_features_rf(df: pd.DataFrame) -> pd.DataFrame:
     # ── Target ───────────────────────────────
     features["target"] = (close.shift(-1) > close).astype(int)
 
-    # Drop NaN rows
-    features = features.dropna()
+    # Drop rows with no target, fill remaining NaN with 0
+    features = features.dropna(subset=["target"])
+    features = features.fillna(0)
 
     return features
 
