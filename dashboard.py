@@ -88,7 +88,7 @@ st.sidebar.title("📈 Stock Analysis Bot")
 st.sidebar.caption("⚠️ Educational use only. Not financial advice.")
 st.sidebar.divider()
 
-page = st.sidebar.radio("View", ["Latest Report", "History", "Run Analysis", "Backtest", "Predictions", "Watchlist & Alerts"])
+page = st.sidebar.radio("View", ["Latest Report", "History", "Run Analysis", "Screener", "Backtest", "Predictions", "Watchlist & Alerts"])
 
 
 # ── Latest Report ─────────────────────────────
@@ -257,6 +257,164 @@ elif page == "Run Analysis":
                     st.error(f"Error: {e}")
                     import traceback
                     st.code(traceback.format_exc())
+
+
+# ── Screener ──────────────────────────────────
+elif page == "Screener":
+    st.title("Stock Screener")
+    st.caption("⚠️ Screening results are not financial advice. Always do your own research.")
+
+    st.info("The screener scans hundreds of stocks and surfaces the ones with the strongest technical BUY signals — no need to know the ticker first.")
+
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        universe = st.selectbox(
+            "Universe",
+            options=["Dow Jones 30", "NASDAQ 100", "S&P 500 (100 stocks)"],
+            index=0,
+            help="Which group of stocks to scan"
+        )
+    with col2:
+        max_rsi = st.slider("Max RSI (oversold threshold)", min_value=25, max_value=60, value=45,
+            help="Only show stocks with RSI below this — lower RSI = more oversold = potential bounce")
+    with col3:
+        max_results = st.slider("Max results", min_value=5, max_value=30, value=15)
+
+    col4, col5 = st.columns(2)
+    with col4:
+        require_above_sma20 = st.checkbox("Must be above SMA20 (uptrend)", value=True)
+        require_macd_bullish = st.checkbox("Must have bullish MACD", value=False)
+    with col5:
+        min_price = st.number_input("Min price ($)", value=5.0, step=1.0)
+        min_volume_ratio = st.slider("Min volume ratio", min_value=0.1, max_value=2.0, value=0.5, step=0.1,
+            help="Volume must be at least this times the 20-day average")
+
+    if st.button("🔍  Run Screen", type="primary"):
+        criteria = {
+            "max_rsi":              max_rsi,
+            "min_rsi":              20,
+            "require_above_sma20":  require_above_sma20,
+            "require_macd_bullish": require_macd_bullish,
+            "min_volume_ratio":     min_volume_ratio,
+            "min_price":            min_price,
+        }
+
+        from screener import UNIVERSES
+        total = len(UNIVERSES.get(universe, []))
+        progress_bar = st.progress(0, text=f"Scanning {total} stocks...")
+        status_text  = st.empty()
+
+        def update_progress(current, total, ticker):
+            pct = current / total
+            progress_bar.progress(pct, text=f"Scanning {current}/{total} — {ticker}")
+            status_text.caption(f"Checking {ticker}...")
+
+        try:
+            from screener import run_screener
+            screen_results = run_screener(
+                universe=universe,
+                criteria=criteria,
+                max_results=max_results,
+                progress_callback=update_progress,
+            )
+            progress_bar.progress(1.0, text="Scan complete!")
+            status_text.empty()
+            st.session_state["screen_results"] = screen_results
+        except Exception as e:
+            st.error(f"Screener failed: {e}")
+            import traceback
+            st.code(traceback.format_exc())
+
+    # Display results
+    if "screen_results" in st.session_state:
+        r = st.session_state["screen_results"]
+        st.divider()
+
+        # Summary metrics
+        m1, m2, m3, m4 = st.columns(4)
+        m1.metric("Stocks Scanned",   r["screened"])
+        m2.metric("Passed Filters",   r["passed"])
+        m3.metric("Filtered Out",     r["failed"])
+        m4.metric("Scan Duration",    f"{r['duration']}s")
+        st.caption(f"Universe: {r['universe']}   |   {r['timestamp']}")
+
+        results = r["results"]
+        if not results:
+            st.warning("No stocks passed the screening criteria. Try relaxing the filters — increase Max RSI or uncheck SMA20 requirement.")
+        else:
+            st.subheader(f"Top {len(results)} Candidates")
+
+            # Results table
+            table_data = []
+            for stock in results:
+                table_data.append({
+                    "Ticker":       stock["ticker"],
+                    "Price":        f"${stock['price']}",
+                    "RSI":          stock["rsi"],
+                    "Score":        stock["score"],
+                    "1D Return":    f"{stock['return_1d']:+.2f}%",
+                    "5D Return":    f"{stock['return_5d']:+.2f}%",
+                    "Vol Ratio":    f"{stock['volume_ratio']}x",
+                    "Above SMA20":  "✓" if stock["above_sma20"] else "✗",
+                    "Above SMA50":  "✓" if stock["above_sma50"] else "✗",
+                    "MACD Bullish": "✓" if stock["macd_bullish"] else "✗",
+                })
+            st.dataframe(pd.DataFrame(table_data), use_container_width=True)
+
+            # Score chart
+            st.divider()
+            st.subheader("Signal Strength")
+            tickers_list = [s["ticker"] for s in results]
+            scores_list  = [s["score"] for s in results]
+            rsi_list     = [s["rsi"] for s in results]
+
+            fig = go.Figure()
+            fig.add_trace(go.Bar(
+                name="Score", x=tickers_list, y=scores_list,
+                marker_color="#2E75B6", yaxis="y"
+            ))
+            fig.add_trace(go.Scatter(
+                name="RSI", x=tickers_list, y=rsi_list,
+                mode="lines+markers", marker_color="#ef4444",
+                yaxis="y2"
+            ))
+            fig.update_layout(
+                yaxis=dict(title="Score", side="left"),
+                yaxis2=dict(title="RSI", side="right", overlaying="y", range=[0, 80]),
+                plot_bgcolor="rgba(0,0,0,0)",
+                paper_bgcolor="rgba(0,0,0,0)",
+                height=380,
+                hovermode="x unified",
+                legend=dict(orientation="h", yanchor="bottom", y=1.02),
+            )
+            st.plotly_chart(fig, use_container_width=True)
+
+            # Add to watchlist button
+            st.divider()
+            st.subheader("Add to Watchlist")
+            top5 = [s["ticker"] for s in results[:5]]
+            st.caption(f"Top 5 candidates: {', '.join(top5)}")
+
+            col_a, col_b = st.columns(2)
+            with col_a:
+                if st.button("➕ Add top 5 to watchlist"):
+                    current = st.session_state["watchlist"]
+                    combined = list(dict.fromkeys(current + top5))
+                    st.session_state["watchlist"] = combined
+                    st.success(f"Added to watchlist: {', '.join(top5)}")
+            with col_b:
+                custom_add = st.text_input("Or add specific tickers from results", placeholder="e.g. AAPL, MSFT")
+                if st.button("➕ Add these"):
+                    to_add = [t.strip().upper() for t in custom_add.split(",") if t.strip()]
+                    if to_add:
+                        current  = st.session_state["watchlist"]
+                        combined = list(dict.fromkeys(current + to_add))
+                        st.session_state["watchlist"] = combined
+                        st.success(f"Added: {', '.join(to_add)}")
+
+            # Download
+            csv = pd.DataFrame(table_data).to_csv(index=False)
+            st.download_button("Download Results CSV", csv, "screen_results.csv", "text/csv")
 
 
 # ── Backtest ──────────────────────────────────
