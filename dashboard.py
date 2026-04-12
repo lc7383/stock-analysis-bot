@@ -88,7 +88,7 @@ st.sidebar.title("📈 Stock Analysis Bot")
 st.sidebar.caption("⚠️ Educational use only. Not financial advice.")
 st.sidebar.divider()
 
-page = st.sidebar.radio("View", ["Latest Report", "History", "Run Analysis", "Backtest", "Watchlist & Alerts"])
+page = st.sidebar.radio("View", ["Latest Report", "History", "Run Analysis", "Backtest", "Predictions", "Watchlist & Alerts"])
 
 
 # ── Latest Report ─────────────────────────────
@@ -269,19 +269,11 @@ elif page == "Backtest":
         bt_tickers = st.text_input("Tickers", value=", ".join(st.session_state["watchlist"]))
     with col2:
         bt_period = st.selectbox(
-    "Period",
-    options=["3mo", "6mo", "1y", "18mo", "2y", "3y", "5y"],
-    index=3,
-    format_func=lambda x: {
-        "3mo": "3 months",
-        "6mo": "6 months",
-        "1y":  "1 year",
-        "18mo":  "18 months",
-        "2y":  "2 years",
-        "3y":  "3 years",
-        "5y":  "5 years",
-    }[x]
-)
+            "Period",
+            options=["6mo", "1y", "2y"],
+            index=1,
+            format_func=lambda x: {"6mo": "6 months", "1y": "1 year", "2y": "2 years"}[x]
+        )
     with col3:
         bt_cash = st.number_input("Starting cash ($)", value=10000, step=1000, min_value=1000)
 
@@ -379,6 +371,121 @@ elif page == "Backtest":
                 st.download_button(f"Download {ticker_select} trades CSV", csv, f"{ticker_select}_trades.csv", "text/csv")
             else:
                 st.info("No trades were executed for this ticker.")
+
+
+# ── Predictions ───────────────────────────────
+elif page == "Predictions":
+    st.title("Price Direction Predictions")
+    st.caption("⚠️ ML predictions are not guaranteed to be accurate. Educational use only. Not financial advice.")
+
+    col1, col2 = st.columns(2)
+    with col1:
+        pred_tickers = st.text_input("Tickers", value=", ".join(st.session_state["watchlist"]))
+    with col2:
+        pred_period = st.selectbox(
+            "Training period",
+            options=["6mo", "1y", "2y"],
+            index=1,
+            format_func=lambda x: {"6mo": "6 months", "1y": "1 year", "2y": "2 years"}[x],
+            help="More data = better model accuracy"
+        )
+
+    st.info("The model trains on historical data and predicts whether each stock will be UP or DOWN tomorrow. Accuracy above 55% beats random guessing.")
+
+    if st.button("▶  Run Predictions", type="primary"):
+        tickers = [t.strip().upper() for t in pred_tickers.split(",") if t.strip()]
+        if not tickers:
+            st.error("Please enter at least one ticker.")
+        else:
+            with st.spinner(f"Training models for {', '.join(tickers)}... this may take a minute"):
+                try:
+                    from prediction_lr import run_predictions_watchlist
+                    results = run_predictions_watchlist(tickers, period=pred_period)
+                    st.session_state["prediction_results"] = results
+                    st.success("✅ Predictions ready!")
+                except Exception as e:
+                    st.error(f"Prediction failed: {e}")
+                    import traceback
+                    st.code(traceback.format_exc())
+
+    # Display results
+    if "prediction_results" in st.session_state:
+        results = st.session_state["prediction_results"]
+        st.divider()
+
+        # Prediction cards
+        st.subheader("Tomorrow's Predictions")
+        valid = {k: v for k, v in results.items() if "error" not in v}
+        cols  = st.columns(len(valid)) if valid else []
+
+        for col, (ticker, r) in zip(cols, valid.items()):
+            pred   = r["prediction"]
+            color  = "#22c55e" if pred["direction"] == "UP" else "#ef4444"
+            icon   = "▲" if pred["direction"] == "UP" else "▼"
+            with col:
+                st.markdown(
+                    f"""<div style="border:1px solid {color};border-radius:12px;padding:16px;text-align:center">
+                        <div style="font-size:2rem;color:{color}">{icon}</div>
+                        <div style="font-size:1.4rem;font-weight:600">{ticker}</div>
+                        <div style="font-size:1.1rem;color:{color};font-weight:500">{pred['direction']}</div>
+                        <div style="color:#888;font-size:0.9rem">Signal: {pred['signal']}</div>
+                        <div style="color:#888;font-size:0.85rem">{pred['confidence']:.0f}% confidence</div>
+                        <div style="color:#888;font-size:0.8rem">Model: {r['model_accuracy']}% accurate</div>
+                    </div>""",
+                    unsafe_allow_html=True,
+                )
+
+        # Accuracy vs baseline table
+        st.divider()
+        st.subheader("Model Performance")
+        st.caption("Accuracy above baseline means the model is learning something useful. Above 55% beats random guessing.")
+        perf_data = []
+        for ticker, r in valid.items():
+            beats_baseline = r["model_accuracy"] > r["baseline_accuracy"]
+            perf_data.append({
+                "Ticker":            ticker,
+                "Current Price":     f"${r['current_price']}",
+                "Price Change":      f"{r['price_change_pct']:+.2f}%",
+                "Prediction":        r["prediction"]["direction"],
+                "Confidence":        f"{r['prediction']['confidence']:.0f}%",
+                "Model Accuracy":    f"{r['model_accuracy']}%",
+                "Baseline Accuracy": f"{r['baseline_accuracy']}%",
+                "Beats Baseline":    "✓" if beats_baseline else "✗",
+                "Data Points":       r["data_points"],
+            })
+        if perf_data:
+            st.dataframe(pd.DataFrame(perf_data), use_container_width=True)
+
+        # Feature importance chart
+        st.divider()
+        st.subheader("Feature Importance")
+        st.caption("Which indicators the model relies on most to make predictions.")
+        ticker_sel = st.selectbox("Select ticker", list(valid.keys()), key="feat_ticker")
+        if ticker_sel:
+            imp = valid[ticker_sel]["feature_importance"]
+            top10 = dict(list(imp.items())[:10])
+            fig = go.Figure(go.Bar(
+                x=list(top10.values()),
+                y=list(top10.keys()),
+                orientation="h",
+                marker_color="#2E75B6",
+            ))
+            fig.update_layout(
+                xaxis_title="Importance",
+                yaxis_title="Feature",
+                plot_bgcolor="rgba(0,0,0,0)",
+                paper_bgcolor="rgba(0,0,0,0)",
+                height=350,
+                yaxis=dict(autorange="reversed"),
+            )
+            st.plotly_chart(fig, use_container_width=True)
+
+        # Error messages for failed tickers
+        errors = {k: v for k, v in results.items() if "error" in v}
+        if errors:
+            st.divider()
+            for ticker, r in errors.items():
+                st.warning(f"{ticker}: {r['error']}")
 
 
 # ── Watchlist & Alerts ────────────────────────
