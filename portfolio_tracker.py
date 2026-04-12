@@ -159,33 +159,62 @@ def remove_holding(ticker: str) -> dict:
 def get_current_prices(tickers: list[str]) -> dict[str, float]:
     """Fetches current prices for a list of tickers."""
     prices = {}
+
+    # Try batch fetch first
     try:
-        # Fetch all tickers at once — faster and avoids rate limiting
-        data = yf.download(tickers, period="2d", interval="1d",
-                          progress=False, auto_adjust=True)
-        print("DATA COLUMNS:", data.columns.tolist())
-        print("DATA TAIL:", data.tail(2))
-        if not data.empty:
-            close = data["Close"]
-            for ticker in tickers:
-                try:
-                    if len(tickers) == 1:
-                        prices[ticker] = round(float(close.dropna().iloc[-1]), 2)
-                    elif ticker in close.columns:
-                        prices[ticker] = round(float(close[ticker].dropna().iloc[-1]), 2)
-                except Exception as e:
-                    logger.warning(f"Price parse failed for {ticker}: {e}")
+        data = yf.download(
+            tickers, period="2d", interval="1d",
+            progress=False, auto_adjust=True
+        )
     except Exception as e:
         logger.warning(f"Batch price fetch failed: {e}")
-        # Fallback — fetch individually
-        for ticker in tickers:
-            try:
-                df = yf.download(ticker, period="2d", interval="1d",
-                               progress=False, auto_adjust=True)
-                if not df.empty:
-                    prices[ticker] = round(float(df["Close"].iloc[-1]), 2)
-            except Exception:
-                pass
+        data = None
+
+    # Parse batch results
+    if data is not None and not data.empty:
+        try:
+            close = data["Close"]
+            if hasattr(close, "columns"):
+                # Multiple tickers — may have MultiIndex tuple columns
+                for ticker in tickers:
+                    # Try direct key first
+                    col_key = None
+                    if ticker in close.columns:
+                        col_key = ticker
+                    else:
+                        # Try tuple columns like ('Close', 'AAPL')
+                        for col in close.columns:
+                            if isinstance(col, tuple) and ticker in col:
+                                col_key = col
+                                break
+                    if col_key is not None:
+                        val = close[col_key].dropna()
+                        if not val.empty:
+                            prices[ticker] = round(float(val.iloc[-1]), 2)
+            else:
+                # Single ticker — flat Series
+                val = close.dropna()
+                if not val.empty and len(tickers) == 1:
+                    prices[tickers[0]] = round(float(val.iloc[-1]), 2)
+        except Exception as e:
+            logger.warning(f"Price parse failed: {e}")
+
+    # Fallback for any missing tickers
+    missing = [t for t in tickers if t not in prices]
+    for ticker in missing:
+        try:
+            df = yf.download(
+                ticker, period="2d", interval="1d",
+                progress=False, auto_adjust=True
+            )
+            if not df.empty:
+                close_col = df["Close"]
+                if hasattr(close_col, "columns"):
+                    close_col = close_col.iloc[:, 0]
+                prices[ticker] = round(float(close_col.dropna().iloc[-1]), 2)
+        except Exception as e:
+            logger.warning(f"Individual fetch failed for {ticker}: {e}")
+
     return prices
 
 
