@@ -111,7 +111,6 @@ if page == "Portfolio":
 
         with st.spinner("Fetching current prices..."):
             result = calculate_portfolio_value()
-st.write("Prices fetched:", {h["ticker"]: h["current_price"] for h in result["holdings"]})
 
         holdings = result["holdings"]
         if not holdings:
