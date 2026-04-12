@@ -159,13 +159,32 @@ def remove_holding(ticker: str) -> dict:
 def get_current_prices(tickers: list[str]) -> dict[str, float]:
     """Fetches current prices for a list of tickers."""
     prices = {}
-    for ticker in tickers:
-        try:
-            df = yf.download(ticker, period="2d", interval="1d", progress=False, auto_adjust=True)
-            if not df.empty:
-                prices[ticker] = round(float(df["Close"].iloc[-1]), 2)
-        except Exception as e:
-            logger.warning(f"Could not fetch price for {ticker}: {e}")
+    try:
+        # Fetch all tickers at once — faster and avoids rate limiting
+        data = yf.download(tickers, period="2d", interval="1d",
+                          progress=False, auto_adjust=True)
+        if not data.empty:
+            close = data["Close"]
+            for ticker in tickers:
+                try:
+                    if ticker in close.columns:
+                        prices[ticker] = round(float(close[ticker].dropna().iloc[-1]), 2)
+                    else:
+                        # Single ticker returns different format
+                        prices[ticker] = round(float(close.dropna().iloc[-1]), 2)
+                except Exception:
+                    pass
+    except Exception as e:
+        logger.warning(f"Batch price fetch failed: {e}")
+        # Fallback — fetch individually
+        for ticker in tickers:
+            try:
+                df = yf.download(ticker, period="2d", interval="1d",
+                               progress=False, auto_adjust=True)
+                if not df.empty:
+                    prices[ticker] = round(float(df["Close"].iloc[-1]), 2)
+            except Exception:
+                pass
     return prices
 
 
