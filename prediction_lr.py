@@ -143,8 +143,8 @@ def train_model(features: pd.DataFrame) -> dict:
     if not SKLEARN_AVAILABLE:
         return {"error": "scikit-learn not installed. Run: pip install scikit-learn"}
 
-    if len(features) < 100:
-        return {"error": "Not enough data — need at least 100 rows after feature engineering"}
+    if len(features) < 60:
+        return {"error": "Not enough data — need at least 60 rows after feature engineering"}
 
     feature_cols = [c for c in features.columns if c != "target"]
     X = features[feature_cols].values
@@ -278,7 +278,7 @@ def run_prediction(ticker: str, period: str = "1y") -> dict:
 
     # Build features
     features = build_features(df)
-    if len(features) < 100:
+    if len(features) < 60:
         return {"error": f"Not enough data after feature engineering ({len(features)} rows)", "ticker": ticker}
 
     # Train model
