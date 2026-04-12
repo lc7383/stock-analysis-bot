@@ -417,13 +417,37 @@ elif page == "Run Analysis":
     st.title("Run Analysis Now")
     st.caption("⚠️ This will use your Anthropic API credits.")
 
-    # Show saved watchlist as default
-    watchlist_str = ", ".join(st.session_state["watchlist"])
-    tickers_input = st.text_input("Watchlist (comma separated)", value=watchlist_str)
+    # Use portfolio tickers if available, otherwise use saved watchlist
+    from portfolio_tracker import load_portfolio
+    portfolio_holdings = load_portfolio().get("holdings", [])
+    portfolio_tickers  = [h["ticker"] for h in portfolio_holdings]
+    default_tickers    = portfolio_tickers if portfolio_tickers else st.session_state["watchlist"]
+    watchlist_str      = ", ".join(default_tickers)
 
-    col1, col2 = st.columns([1, 3])
+    tickers_input = st.text_input(
+        "Watchlist (comma separated)",
+        value=watchlist_str,
+        help="Pre-filled from your portfolio holdings. Edit as needed."
+    )
+
+    col1, col2, col3 = st.columns([2, 2, 2])
     with col1:
         save_watchlist = st.checkbox("Save as my watchlist", value=True)
+    with col2:
+        period = st.selectbox(
+            "Date range",
+            options=["1mo", "3mo", "6mo", "1y", "ytd"],
+            index=2,
+            format_func=lambda x: {
+                "1mo": "1 month", "3mo": "3 months",
+                "6mo": "6 months", "1y": "1 year", "ytd": "Year to date",
+            }[x]
+        )
+    with col3:
+        if portfolio_tickers:
+            if st.button("📋 Use my portfolio tickers"):
+                st.session_state["watchlist"] = portfolio_tickers
+                st.rerun()
 
     if st.button("▶  Run Analysis", type="primary"):
         tickers = [t.strip().upper() for t in tickers_input.split(",") if t.strip()]
@@ -437,7 +461,7 @@ elif page == "Run Analysis":
             with st.spinner(f"Analyzing {', '.join(tickers)}... this may take 2-3 minutes"):
                 try:
                     from analysis_agent import run_pipeline
-                    analysis = run_pipeline(tickers, save_json=False)
+                    analysis = run_pipeline(tickers, save_json=False, period=period)
 
                     if "error" in analysis:
                         st.error(f"Analysis failed: {analysis['error']}")
