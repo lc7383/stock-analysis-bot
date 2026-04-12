@@ -166,17 +166,15 @@ def get_current_prices(tickers: list[str]) -> dict[str, float]:
         print("DATA COLUMNS:", data.columns.tolist())
         print("DATA TAIL:", data.tail(2))
         if not data.empty:
-    close = data["Close"]
-    for ticker in tickers:
-        try:
-            if len(tickers) == 1:
-                # Single ticker — flat column structure
-                prices[ticker] = round(float(close.dropna().iloc[-1]), 2)
-            elif ticker in close.columns:
-                # Multiple tickers — column per ticker
-                prices[ticker] = round(float(close[ticker].dropna().iloc[-1]), 2)
-        except Exception as e:
-        logger.warning(f"Price parse failed for {ticker}: {e}")        
+            close = data["Close"]
+            for ticker in tickers:
+                try:
+                    if len(tickers) == 1:
+                        prices[ticker] = round(float(close.dropna().iloc[-1]), 2)
+                    elif ticker in close.columns:
+                        prices[ticker] = round(float(close[ticker].dropna().iloc[-1]), 2)
+                except Exception as e:
+                    logger.warning(f"Price parse failed for {ticker}: {e}")        
         # Fallback — fetch individually
         for ticker in tickers:
             try:
