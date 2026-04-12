@@ -384,9 +384,9 @@ elif page == "Predictions":
     with col2:
         pred_period = st.selectbox(
             "Training period",
-            options=["1y", "2y", "3y"],
+            options=["6mo", "1y", "2y"],
             index=1,
-            format_func=lambda x: {"1y": "1 year", "2y": "2 years", "3y": "3 years"}[x],
+            format_func=lambda x: {"6mo": "6 months", "1y": "1 year", "2y": "2 years"}[x],
             help="More data = better model accuracy"
         )
 
@@ -413,15 +413,39 @@ elif page == "Predictions":
         results = st.session_state["prediction_results"]
         st.divider()
 
+        # Show market regime banner
+        valid = {k: v for k, v in results.items() if "error" not in v}
+        if valid:
+            first = next(iter(valid.values()))
+            regime = first.get("regime", {})
+            if regime:
+                regime_name = regime.get("regime", "Unknown")
+                color       = regime.get("color", "#6b7280")
+                vix         = regime.get("vix", "N/A")
+                fg          = regime.get("fear_greed", "N/A")
+                warning     = regime.get("warning", "")
+                adj         = int(regime.get("confidence_adj", 0) * 100)
+
+                st.markdown(
+                    f"""<div style="border-left:4px solid {color};padding:12px 16px;background:{'#fef2f2' if adj >= 20 else '#fff7ed' if adj >= 10 else '#f0fdf4'};border-radius:0 8px 8px 0;margin-bottom:16px">
+                        <strong style="color:{color}">Market Regime: {regime_name}</strong>
+                        {"&nbsp;&nbsp;|&nbsp;&nbsp;VIX: " + str(vix) if vix else ""}
+                        {"&nbsp;&nbsp;|&nbsp;&nbsp;Fear & Greed: " + str(fg) if fg else ""}
+                        {f"&nbsp;&nbsp;|&nbsp;&nbsp;Confidence reduced by {adj}%" if adj > 0 else ""}
+                        <br><span style="font-size:0.85rem;color:#666">{warning}</span>
+                    </div>""",
+                    unsafe_allow_html=True,
+                )
+
         # Prediction cards
         st.subheader("Tomorrow's Predictions")
-        valid = {k: v for k, v in results.items() if "error" not in v}
-        cols  = st.columns(len(valid)) if valid else []
+        cols = st.columns(len(valid)) if valid else []
 
         for col, (ticker, r) in zip(cols, valid.items()):
-            pred   = r["prediction"]
-            color  = "#22c55e" if pred["direction"] == "UP" else "#ef4444"
-            icon   = "▲" if pred["direction"] == "UP" else "▼"
+            pred  = r["prediction"]
+            color = "#22c55e" if pred["direction"] == "UP" else "#ef4444"
+            icon  = "▲" if pred["direction"] == "UP" else "▼"
+            adj_label = f"<div style='color:#f59e0b;font-size:0.75rem'>adj for {r['regime']['regime']}</div>" if pred.get("regime_adjusted") else ""
             with col:
                 st.markdown(
                     f"""<div style="border:1px solid {color};border-radius:12px;padding:16px;text-align:center">
@@ -430,6 +454,7 @@ elif page == "Predictions":
                         <div style="font-size:1.1rem;color:{color};font-weight:500">{pred['direction']}</div>
                         <div style="color:#888;font-size:0.9rem">Signal: {pred['signal']}</div>
                         <div style="color:#888;font-size:0.85rem">{pred['confidence']:.0f}% confidence</div>
+                        {adj_label}
                         <div style="color:#888;font-size:0.8rem">Model: {r['model_accuracy']}% accurate</div>
                     </div>""",
                     unsafe_allow_html=True,
@@ -442,16 +467,20 @@ elif page == "Predictions":
         perf_data = []
         for ticker, r in valid.items():
             beats_baseline = r["model_accuracy"] > r["baseline_accuracy"]
+            pred           = r["prediction"]
+            raw_conf       = pred.get("raw_confidence", pred["confidence"])
             perf_data.append({
-                "Ticker":            ticker,
-                "Current Price":     f"${r['current_price']}",
-                "Price Change":      f"{r['price_change_pct']:+.2f}%",
-                "Prediction":        r["prediction"]["direction"],
-                "Confidence":        f"{r['prediction']['confidence']:.0f}%",
-                "Model Accuracy":    f"{r['model_accuracy']}%",
-                "Baseline Accuracy": f"{r['baseline_accuracy']}%",
-                "Beats Baseline":    "✓" if beats_baseline else "✗",
-                "Data Points":       r["data_points"],
+                "Ticker":              ticker,
+                "Current Price":       f"${r['current_price']}",
+                "Price Change":        f"{r['price_change_pct']:+.2f}%",
+                "Prediction":          pred["direction"],
+                "Signal":              pred["signal"],
+                "Confidence (adj)":    f"{pred['confidence']:.0f}%",
+                "Confidence (raw)":    f"{raw_conf:.0f}%",
+                "Model Accuracy":      f"{r['model_accuracy']}%",
+                "Baseline Accuracy":   f"{r['baseline_accuracy']}%",
+                "Beats Baseline":      "✓" if beats_baseline else "✗",
+                "Regime":              r.get("regime", {}).get("regime", "N/A"),
             })
         if perf_data:
             st.dataframe(pd.DataFrame(perf_data), use_container_width=True)
