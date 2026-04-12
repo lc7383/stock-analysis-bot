@@ -122,7 +122,7 @@ def analyze_stocks(summaries: list[dict], macro: dict, insider: dict) -> dict:
     try:
         response = get_client().messages.create(
             model=MODEL,
-            max_tokens=4000,
+            max_tokens=10000,
             system=SYSTEM_PROMPT,
             messages=[{"role": "user", "content": build_user_prompt(summaries, macro, insider)}]
         )
