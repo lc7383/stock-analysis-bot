@@ -384,9 +384,9 @@ elif page == "Predictions":
     with col2:
         pred_period = st.selectbox(
             "Training period",
-            options=["6mo", "1y", "2y"],
+            options=["1y", "2y", "3y"],
             index=1,
-            format_func=lambda x: {"6mo": "6 months", "1y": "1 year", "2y": "2 years"}[x],
+            format_func=lambda x: {"1y": "1 year", "2y": "2 years", "3y": "3 years"}[x],
             help="More data = better model accuracy"
         )
 
