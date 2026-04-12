@@ -285,7 +285,11 @@ elif page == "Screener":
         max_rsi = st.slider("Max RSI", min_value=25, max_value=70, value=55,
             help="RSI measures momentum 0-100. Below 30 = very oversold. Below 45 = moderately oversold. Above 70 = overbought. Raise this to get more results.")
     with col3:
-        max_results = st.slider("Max results", min_value=5, max_value=30, value=15)
+        max_results = st.slider(
+            "Max results",
+            min_value=5, max_value=30, value=15,
+            help="How many stocks to show in the results. The screener ranks all passing stocks by score and shows the top N. 15 is a good starting point."
+        )
 
     st.caption("💡 **Tip:** Start with RSI 55, SMA20 unchecked, and Dow Jones 30 to see how the screener works. Then tighten filters once you understand the results.")
     st.divider()
