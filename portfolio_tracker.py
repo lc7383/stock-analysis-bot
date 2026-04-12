@@ -174,7 +174,9 @@ def get_current_prices(tickers: list[str]) -> dict[str, float]:
                     elif ticker in close.columns:
                         prices[ticker] = round(float(close[ticker].dropna().iloc[-1]), 2)
                 except Exception as e:
-                    logger.warning(f"Price parse failed for {ticker}: {e}")        
+                    logger.warning(f"Price parse failed for {ticker}: {e}")
+    except Exception as e:
+        logger.warning(f"Batch price fetch failed: {e}")
         # Fallback — fetch individually
         for ticker in tickers:
             try:
