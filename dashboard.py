@@ -88,11 +88,226 @@ st.sidebar.title("📈 Stock Analysis Bot")
 st.sidebar.caption("⚠️ Educational use only. Not financial advice.")
 st.sidebar.divider()
 
-page = st.sidebar.radio("View", ["Latest Report", "History", "Run Analysis", "Screener", "Backtest", "Predictions", "Watchlist & Alerts"])
+page = st.sidebar.radio("View", ["Portfolio", "Latest Report", "History", "Run Analysis", "Screener", "Backtest", "Predictions", "Watchlist & Alerts"])
 
 
 # ── Latest Report ─────────────────────────────
-if page == "Latest Report":
+# ── Portfolio Tracker ─────────────────────────
+if page == "Portfolio":
+    st.title("Portfolio Tracker")
+    st.caption("⚠️ For educational purposes only. Not financial advice.")
+
+    from portfolio_tracker import (
+        load_portfolio, save_portfolio, add_holding,
+        remove_holding, calculate_portfolio_value,
+        compare_with_recommendations
+    )
+
+    tab1, tab2, tab3 = st.tabs(["My Holdings", "Add / Remove", "vs Recommendations"])
+
+    # ── Tab 1: Holdings overview ──────────────
+    with tab1:
+        st.subheader("Current Holdings")
+
+        with st.spinner("Fetching current prices..."):
+            result = calculate_portfolio_value()
+
+        holdings = result["holdings"]
+        if not holdings:
+            st.info("No holdings yet. Go to the Add / Remove tab to add your stocks.")
+        else:
+            # Summary metrics
+            gain_color = "normal" if result["total_gain_loss"] >= 0 else "inverse"
+            m1, m2, m3, m4 = st.columns(4)
+            m1.metric("Total Invested",   f"${result['total_cost']:,.2f}")
+            m2.metric("Current Value",    f"${result['total_value']:,.2f}")
+            m3.metric("Total P&L",        f"${result['total_gain_loss']:+,.2f}",
+                      f"{result['total_return_pct']:+.2f}%",
+                      delta_color=gain_color)
+            m4.metric("Positions",        len(holdings))
+
+            st.caption(f"Last updated: {result['as_of']}")
+            st.divider()
+
+            # Holdings table
+            table_data = []
+            for h in holdings:
+                table_data.append({
+                    "Ticker":         h["ticker"],
+                    "Shares":         h["shares"],
+                    "Buy Price":      f"${h['buy_price']:.2f}",
+                    "Current Price":  f"${h['current_price']:.2f}",
+                    "Cost Basis":     f"${h['cost']:,.2f}",
+                    "Market Value":   f"${h['value']:,.2f}",
+                    "P&L ($)":        f"${h['gain_loss']:+,.2f}",
+                    "P&L (%)":        f"{h['return_pct']:+.2f}%",
+                    "Days Held":      h["days_held"],
+                    "Buy Date":       h["buy_date"],
+                })
+            st.dataframe(pd.DataFrame(table_data), use_container_width=True)
+
+            # P&L chart
+            st.divider()
+            st.subheader("P&L by Position")
+            colors = ["#22c55e" if h["gain_loss"] >= 0 else "#ef4444" for h in holdings]
+            fig = go.Figure(go.Bar(
+                x=[h["ticker"] for h in holdings],
+                y=[h["return_pct"] for h in holdings],
+                marker_color=colors,
+                text=[f"{h['return_pct']:+.1f}%" for h in holdings],
+                textposition="outside",
+            ))
+            fig.add_hline(y=0, line_dash="dash", line_color="gray", line_width=1)
+            fig.update_layout(
+                yaxis_title="Return %",
+                plot_bgcolor="rgba(0,0,0,0)",
+                paper_bgcolor="rgba(0,0,0,0)",
+                height=350,
+            )
+            st.plotly_chart(fig, use_container_width=True)
+
+            # Portfolio allocation pie chart
+            st.divider()
+            st.subheader("Portfolio Allocation")
+            fig2 = go.Figure(go.Pie(
+                labels=[h["ticker"] for h in holdings],
+                values=[h["value"] for h in holdings],
+                hole=0.4,
+                textinfo="label+percent",
+            ))
+            fig2.update_layout(
+                plot_bgcolor="rgba(0,0,0,0)",
+                paper_bgcolor="rgba(0,0,0,0)",
+                height=350,
+                showlegend=False,
+            )
+            st.plotly_chart(fig2, use_container_width=True)
+
+            # Download
+            csv = pd.DataFrame(table_data).to_csv(index=False)
+            st.download_button("Download Holdings CSV", csv, "portfolio.csv", "text/csv")
+
+    # ── Tab 2: Add / Remove ───────────────────
+    with tab2:
+        st.subheader("Add a Holding")
+        col1, col2, col3, col4 = st.columns(4)
+        with col1:
+            new_ticker = st.text_input("Ticker", placeholder="AAPL").upper()
+        with col2:
+            new_shares = st.number_input("Shares", min_value=0.01, value=1.0, step=0.01)
+        with col3:
+            new_buy_price = st.number_input("Buy price ($)", min_value=0.01, value=100.0, step=0.01)
+        with col4:
+            new_buy_date = st.date_input("Buy date", value=datetime.utcnow().date())
+
+        if st.button("➕ Add Holding", type="primary"):
+            if new_ticker:
+                add_holding(new_ticker, new_shares, new_buy_price, str(new_buy_date))
+                st.success(f"Added {new_shares} shares of {new_ticker} @ ${new_buy_price:.2f}")
+                st.rerun()
+            else:
+                st.error("Please enter a ticker symbol.")
+
+        st.divider()
+        st.subheader("Remove a Holding")
+
+        portfolio = load_portfolio()
+        holdings  = portfolio.get("holdings", [])
+
+        if not holdings:
+            st.info("No holdings to remove.")
+        else:
+            remove_ticker = st.selectbox(
+                "Select holding to remove",
+                [h["ticker"] for h in holdings]
+            )
+            if st.button("🗑️ Remove Holding", type="secondary"):
+                remove_holding(remove_ticker)
+                st.success(f"Removed {remove_ticker} from portfolio.")
+                st.rerun()
+
+        st.divider()
+        st.subheader("Current Portfolio")
+        if holdings:
+            for h in holdings:
+                st.write(f"**{h['ticker']}** — {h['shares']} shares @ ${h['buy_price']:.2f} (bought {h['buy_date']})")
+        else:
+            st.info("No holdings yet.")
+
+        st.divider()
+        st.subheader("Backup & Restore")
+        st.caption("On Streamlit Cloud your portfolio resets when the app restarts. Export regularly to back it up.")
+
+        col_exp, col_imp = st.columns(2)
+        with col_exp:
+            from portfolio_tracker import export_portfolio_json
+            json_export = export_portfolio_json()
+            st.download_button(
+                "💾  Export Portfolio JSON",
+                json_export,
+                "portfolio_backup.json",
+                "application/json",
+                help="Download your portfolio as a JSON file. Keep this safe and use it to restore your holdings."
+            )
+        with col_imp:
+            uploaded = st.file_uploader("📂  Import Portfolio JSON", type="json",
+                help="Upload a previously exported portfolio JSON file to restore your holdings.")
+            if uploaded:
+                try:
+                    from portfolio_tracker import import_portfolio_json
+                    json_str  = uploaded.read().decode("utf-8")
+                    imported  = import_portfolio_json(json_str)
+                    n         = len(imported.get("holdings", []))
+                    st.success(f"Imported {n} holdings successfully!")
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"Import failed: {e}")
+
+    # ── Tab 3: vs Recommendations ─────────────
+    with tab3:
+        st.subheader("Holdings vs Bot Recommendations")
+        st.caption("Compares your positions against the latest Claude analysis.")
+
+        analysis = st.session_state.get("latest_analysis")
+        if not analysis:
+            st.warning("No analysis available. Go to Run Analysis first, then come back here.")
+        else:
+            result      = calculate_portfolio_value()
+            comparisons = compare_with_recommendations(result, analysis)
+
+            if not comparisons:
+                st.info("None of your holdings appear in the latest analysis. Run analysis on your portfolio stocks first.")
+            else:
+                for c in comparisons:
+                    priority_color = {"HIGH": "#ef4444", "MEDIUM": "#f59e0b", "LOW": "#22c55e"}[c["priority"]]
+                    action_icon    = {"BUY": "▲", "HOLD": "●", "SELL": "▼"}.get(c["action"], "●")
+                    action_color   = {"BUY": "#22c55e", "HOLD": "#f59e0b", "SELL": "#ef4444"}.get(c["action"], "#888")
+
+                    st.markdown(
+                        f"""<div style="border-left:4px solid {priority_color};padding:12px 16px;
+                            background:var(--color-background-secondary);border-radius:0 8px 8px 0;margin-bottom:12px">
+                            <div style="display:flex;justify-content:space-between;align-items:center">
+                                <div>
+                                    <strong style="font-size:1.1rem">{c['ticker']}</strong>
+                                    &nbsp;&nbsp;
+                                    <span style="color:{action_color};font-weight:600">{action_icon} {c['action']}</span>
+                                    &nbsp;(confidence {c['confidence']}/10)
+                                </div>
+                                <div style="text-align:right">
+                                    <span style="color:{'#22c55e' if c['return_pct'] >= 0 else '#ef4444'};font-weight:600">
+                                        {c['return_pct']:+.2f}% (${c['gain_loss']:+,.2f})
+                                    </span>
+                                </div>
+                            </div>
+                            <div style="color:var(--color-text-secondary);font-size:0.9rem;margin-top:4px">
+                                {c['alignment']}
+                            </div>
+                        </div>""",
+                        unsafe_allow_html=True,
+                    )
+
+
+elif page == "Latest Report":
     st.title("Latest Analysis")
 
     if "latest_analysis" in st.session_state and st.session_state["latest_analysis"]:
@@ -266,57 +481,29 @@ elif page == "Screener":
 
     st.info("The screener scans hundreds of stocks and surfaces the ones with the strongest technical BUY signals — no need to know the ticker first.")
 
-    st.markdown("""
-    **How the screener works:** It scans every stock in the universe and scores them on technical signals.
-    Lower RSI = more oversold (potential bounce). Higher score = stronger combined signal.
-    The top candidates are ranked by score for you to investigate further.
-    """)
-    st.divider()
-
     col1, col2, col3 = st.columns(3)
     with col1:
         universe = st.selectbox(
             "Universe",
             options=["Dow Jones 30", "NASDAQ 100", "S&P 500 (100 stocks)"],
             index=0,
-            help="Dow Jones 30 is fastest (30 stocks). S&P 500 scans 100 stocks and takes 2-3 minutes."
+            help="Which group of stocks to scan"
         )
     with col2:
-        max_rsi = st.slider("Max RSI", min_value=25, max_value=70, value=55,
-            help="RSI measures momentum 0-100. Below 30 = very oversold. Below 45 = moderately oversold. Above 70 = overbought. Raise this to get more results.")
+        max_rsi = st.slider("Max RSI (oversold threshold)", min_value=25, max_value=60, value=45,
+            help="Only show stocks with RSI below this — lower RSI = more oversold = potential bounce")
     with col3:
-        max_results = st.slider(
-            "Max results",
-            min_value=5, max_value=30, value=15,
-            help="How many stocks to show in the results. The screener ranks all passing stocks by score and shows the top N. 15 is a good starting point."
-        )
-
-    st.caption("💡 **Tip:** Start with RSI 55, SMA20 unchecked, and Dow Jones 30 to see how the screener works. Then tighten filters once you understand the results.")
-    st.divider()
+        max_results = st.slider("Max results", min_value=5, max_value=30, value=15)
 
     col4, col5 = st.columns(2)
     with col4:
-        require_above_sma20 = st.checkbox(
-            "Must be above SMA20 (uptrend)",
-            value=False,
-            help="SMA20 is the 20-day average price. Being above it suggests an uptrend. WARNING: This conflicts with low RSI — oversold stocks are often below their SMA20. Uncheck this to get more results."
-        )
-        require_macd_bullish = st.checkbox(
-            "Must have bullish MACD",
-            value=False,
-            help="MACD bullish means the fast momentum line is above the slow signal line — suggests upward momentum. This is an additional filter that reduces results significantly. Leave unchecked for a wider search."
-        )
+        require_above_sma20 = st.checkbox("Must be above SMA20 (uptrend)", value=True)
+        require_macd_bullish = st.checkbox("Must have bullish MACD", value=False)
     with col5:
-        min_price = st.number_input(
-            "Min price ($)",
-            value=5.0, step=1.0,
-            help="Filters out very cheap penny stocks which can be volatile and illiquid. $5 is a sensible minimum."
-        )
-        min_volume_ratio = st.slider(
-            "Min volume ratio",
-            min_value=0.1, max_value=2.0, value=0.3, step=0.1,
-            help="Compares today's volume to the 20-day average. 1.0 = average volume. 0.3 means at least 30% of normal volume. Lower this to get more results."
-        )
+        min_price = st.number_input("Min price ($)", value=5.0, step=1.0)
+        min_volume_ratio = st.slider("Min volume ratio", min_value=0.1, max_value=2.0, value=0.5, step=0.1,
+            help="Volume must be at least this times the 20-day average")
+
     if st.button("🔍  Run Screen", type="primary"):
         criteria = {
             "max_rsi":              max_rsi,
