@@ -373,24 +373,32 @@ elif page == "Backtest":
                 st.info("No trades were executed for this ticker.")
 
 
+
 # ── Predictions ───────────────────────────────
 elif page == "Predictions":
     st.title("Price Direction Predictions")
     st.caption("⚠️ ML predictions are not guaranteed to be accurate. Educational use only. Not financial advice.")
 
-    col1, col2 = st.columns(2)
+    col1, col2, col3 = st.columns(3)
     with col1:
         pred_tickers = st.text_input("Tickers", value=", ".join(st.session_state["watchlist"]))
     with col2:
         pred_period = st.selectbox(
             "Training period",
             options=["1y", "2y", "3y"],
-            index=1,
+            index=0,
             format_func=lambda x: {"1y": "1 year", "2y": "2 years", "3y": "3 years"}[x],
-            help="More data = better model accuracy"
+            help="More data = better model accuracy. Minimum 1 year recommended."
+        )
+    with col3:
+        model_choice = st.selectbox(
+            "Model",
+            options=["Compare Both", "Linear Regression", "Random Forest"],
+            index=0,
+            help="Compare Both runs LR and RF and shows where they agree"
         )
 
-    st.info("The model trains on historical data and predicts whether each stock will be UP or DOWN tomorrow. Accuracy above 55% beats random guessing.")
+    st.info("Accuracy above 55% beats random guessing. When both models agree the signal is stronger.")
 
     if st.button("▶  Run Predictions", type="primary"):
         tickers = [t.strip().upper() for t in pred_tickers.split(",") if t.strip()]
@@ -399,24 +407,37 @@ elif page == "Predictions":
         else:
             with st.spinner(f"Training models for {', '.join(tickers)}... this may take a minute"):
                 try:
-                    from prediction_lr import run_predictions_watchlist
-                    results = run_predictions_watchlist(tickers, period=pred_period)
-                    st.session_state["prediction_results"] = results
+                    if model_choice == "Linear Regression":
+                        from prediction_lr import run_predictions_watchlist
+                        results = run_predictions_watchlist(tickers, period=pred_period)
+                        st.session_state["prediction_results"] = results
+                        st.session_state["prediction_mode"]    = "lr"
+                    elif model_choice == "Random Forest":
+                        from prediction_rf import run_predictions_rf_watchlist
+                        results = run_predictions_rf_watchlist(tickers, period=pred_period)
+                        st.session_state["prediction_results"] = results
+                        st.session_state["prediction_mode"]    = "rf"
+                    else:
+                        from prediction_rf import compare_models_watchlist
+                        results = compare_models_watchlist(tickers, period=pred_period)
+                        st.session_state["prediction_results"] = results
+                        st.session_state["prediction_mode"]    = "compare"
                     st.success("✅ Predictions ready!")
                 except Exception as e:
                     st.error(f"Prediction failed: {e}")
                     import traceback
                     st.code(traceback.format_exc())
 
-    # Display results
     if "prediction_results" in st.session_state:
         results = st.session_state["prediction_results"]
+        mode    = st.session_state.get("prediction_mode", "lr")
         st.divider()
 
-        # Show market regime banner
         valid = {k: v for k, v in results.items() if "error" not in v}
+
+        # Market regime banner
         if valid:
-            first = next(iter(valid.values()))
+            first  = next(iter(valid.values()))
             regime = first.get("regime", {})
             if regime:
                 regime_name = regime.get("regime", "Unknown")
@@ -425,7 +446,6 @@ elif page == "Predictions":
                 fg          = regime.get("fear_greed", "N/A")
                 warning     = regime.get("warning", "")
                 adj         = int(regime.get("confidence_adj", 0) * 100)
-
                 st.markdown(
                     f"""<div style="border-left:4px solid {color};padding:12px 16px;background:{'#fef2f2' if adj >= 20 else '#fff7ed' if adj >= 10 else '#f0fdf4'};border-radius:0 8px 8px 0;margin-bottom:16px">
                         <strong style="color:{color}">Market Regime: {regime_name}</strong>
@@ -437,84 +457,147 @@ elif page == "Predictions":
                     unsafe_allow_html=True,
                 )
 
-        # Prediction cards
-        st.subheader("Tomorrow's Predictions")
-        cols = st.columns(len(valid)) if valid else []
+        if mode == "compare":
+            st.subheader("Model Comparison — LR vs Random Forest")
+            st.caption("Green border = models agree. Grey = models disagree (HOLD recommended).")
+            cols = st.columns(len(valid)) if valid else []
+            for col, (ticker, r) in zip(cols, valid.items()):
+                agree      = r["models_agree"]
+                border_col = "#22c55e" if agree else "#9ca3af"
+                rf_color   = "#22c55e" if r["rf_direction"] == "UP" else "#ef4444"
+                lr_color   = "#22c55e" if r["lr_direction"] == "UP" else "#ef4444"
+                with col:
+                    st.markdown(
+                        f"""<div style="border:2px solid {border_col};border-radius:12px;padding:16px;text-align:center">
+                            <div style="font-size:1.4rem;font-weight:600">{ticker}</div>
+                            <div style="font-size:0.85rem;color:#888">${r['current_price']} ({r['price_change_pct']:+.2f}%)</div>
+                            <hr style="margin:8px 0;border-color:#eee">
+                            <div style="display:flex;justify-content:space-around;margin:8px 0">
+                                <div>
+                                    <div style="font-size:0.75rem;color:#888">Linear Reg</div>
+                                    <div style="color:{lr_color};font-weight:600">{r['lr_direction']}</div>
+                                    <div style="font-size:0.8rem;color:#888">{r['lr_confidence']:.0f}%</div>
+                                    <div style="font-size:0.75rem;color:#888">{r['lr_accuracy']}% acc</div>
+                                </div>
+                                <div>
+                                    <div style="font-size:0.75rem;color:#888">Random Forest</div>
+                                    <div style="color:{rf_color};font-weight:600">{r['rf_direction']}</div>
+                                    <div style="font-size:0.8rem;color:#888">{r['rf_confidence']:.0f}%</div>
+                                    <div style="font-size:0.75rem;color:#888">{r['rf_accuracy']}% acc</div>
+                                </div>
+                            </div>
+                            <hr style="margin:8px 0;border-color:#eee">
+                            <div style="font-weight:600;color:{'#22c55e' if agree else '#6b7280'}">
+                                {'✓ AGREE' if agree else '✗ DISAGREE'}
+                            </div>
+                            <div style="font-size:0.9rem">Combined: {r['combined_signal']}</div>
+                            <div style="font-size:0.8rem;color:#888">{r['combined_confidence']:.0f}% confidence</div>
+                        </div>""",
+                        unsafe_allow_html=True,
+                    )
 
-        for col, (ticker, r) in zip(cols, valid.items()):
-            pred  = r["prediction"]
-            color = "#22c55e" if pred["direction"] == "UP" else "#ef4444"
-            icon  = "▲" if pred["direction"] == "UP" else "▼"
-            adj_label = f"<div style='color:#f59e0b;font-size:0.75rem'>adj for {r['regime']['regime']}</div>" if pred.get("regime_adjusted") else ""
-            with col:
-                st.markdown(
-                    f"""<div style="border:1px solid {color};border-radius:12px;padding:16px;text-align:center">
-                        <div style="font-size:2rem;color:{color}">{icon}</div>
-                        <div style="font-size:1.4rem;font-weight:600">{ticker}</div>
-                        <div style="font-size:1.1rem;color:{color};font-weight:500">{pred['direction']}</div>
-                        <div style="color:#888;font-size:0.9rem">Signal: {pred['signal']}</div>
-                        <div style="color:#888;font-size:0.85rem">{pred['confidence']:.0f}% confidence</div>
-                        {adj_label}
-                        <div style="color:#888;font-size:0.8rem">Model: {r['model_accuracy']}% accurate</div>
-                    </div>""",
-                    unsafe_allow_html=True,
+            st.divider()
+            st.subheader("Comparison Summary")
+            table = []
+            for ticker, r in valid.items():
+                table.append({
+                    "Ticker":          ticker,
+                    "LR":              f"{r['lr_direction']} {r['lr_confidence']:.0f}%",
+                    "LR Accuracy":     f"{r['lr_accuracy']}%",
+                    "RF":              f"{r['rf_direction']} {r['rf_confidence']:.0f}%",
+                    "RF Accuracy":     f"{r['rf_accuracy']}%",
+                    "Agree":           "✓" if r["models_agree"] else "✗",
+                    "Combined Signal": r["combined_signal"],
+                    "Confidence":      f"{r['combined_confidence']:.0f}%",
+                })
+            st.dataframe(pd.DataFrame(table), use_container_width=True)
+
+            st.divider()
+            st.subheader("Random Forest Feature Importance")
+            ticker_sel = st.selectbox("Select ticker", list(valid.keys()), key="rf_feat_ticker")
+            if ticker_sel and "top_features" in valid[ticker_sel]:
+                imp = valid[ticker_sel]["top_features"]
+                fig = go.Figure(go.Bar(
+                    x=list(imp.values()), y=list(imp.keys()),
+                    orientation="h", marker_color="#2E75B6",
+                ))
+                fig.update_layout(
+                    xaxis_title="Importance", plot_bgcolor="rgba(0,0,0,0)",
+                    paper_bgcolor="rgba(0,0,0,0)", height=380,
+                    yaxis=dict(autorange="reversed"),
                 )
+                st.plotly_chart(fig, use_container_width=True)
 
-        # Accuracy vs baseline table
-        st.divider()
-        st.subheader("Model Performance")
-        st.caption("Accuracy above baseline means the model is learning something useful. Above 55% beats random guessing.")
-        perf_data = []
-        for ticker, r in valid.items():
-            beats_baseline = r["model_accuracy"] > r["baseline_accuracy"]
-            pred           = r["prediction"]
-            raw_conf       = pred.get("raw_confidence", pred["confidence"])
-            perf_data.append({
-                "Ticker":              ticker,
-                "Current Price":       f"${r['current_price']}",
-                "Price Change":        f"{r['price_change_pct']:+.2f}%",
-                "Prediction":          pred["direction"],
-                "Signal":              pred["signal"],
-                "Confidence (adj)":    f"{pred['confidence']:.0f}%",
-                "Confidence (raw)":    f"{raw_conf:.0f}%",
-                "Model Accuracy":      f"{r['model_accuracy']}%",
-                "Baseline Accuracy":   f"{r['baseline_accuracy']}%",
-                "Beats Baseline":      "✓" if beats_baseline else "✗",
-                "Regime":              r.get("regime", {}).get("regime", "N/A"),
-            })
-        if perf_data:
-            st.dataframe(pd.DataFrame(perf_data), use_container_width=True)
+        else:
+            model_label = "Random Forest" if mode == "rf" else "Linear Regression"
+            st.subheader(f"Tomorrow's Predictions — {model_label}")
+            cols = st.columns(len(valid)) if valid else []
+            for col, (ticker, r) in zip(cols, valid.items()):
+                pred      = r["prediction"]
+                color     = "#22c55e" if pred["direction"] == "UP" else "#ef4444"
+                icon      = "▲" if pred["direction"] == "UP" else "▼"
+                adj_label = f"<div style='color:#f59e0b;font-size:0.75rem'>adj for {r['regime']['regime']}</div>" if pred.get("regime_adjusted") else ""
+                with col:
+                    st.markdown(
+                        f"""<div style="border:1px solid {color};border-radius:12px;padding:16px;text-align:center">
+                            <div style="font-size:2rem;color:{color}">{icon}</div>
+                            <div style="font-size:1.4rem;font-weight:600">{ticker}</div>
+                            <div style="font-size:1.1rem;color:{color};font-weight:500">{pred['direction']}</div>
+                            <div style="color:#888;font-size:0.9rem">Signal: {pred['signal']}</div>
+                            <div style="color:#888;font-size:0.85rem">{pred['confidence']:.0f}% confidence</div>
+                            {adj_label}
+                            <div style="color:#888;font-size:0.8rem">Model: {r['model_accuracy']}% accurate</div>
+                        </div>""",
+                        unsafe_allow_html=True,
+                    )
 
-        # Feature importance chart
-        st.divider()
-        st.subheader("Feature Importance")
-        st.caption("Which indicators the model relies on most to make predictions.")
-        ticker_sel = st.selectbox("Select ticker", list(valid.keys()), key="feat_ticker")
-        if ticker_sel:
-            imp = valid[ticker_sel]["feature_importance"]
-            top10 = dict(list(imp.items())[:10])
-            fig = go.Figure(go.Bar(
-                x=list(top10.values()),
-                y=list(top10.keys()),
-                orientation="h",
-                marker_color="#2E75B6",
-            ))
-            fig.update_layout(
-                xaxis_title="Importance",
-                yaxis_title="Feature",
-                plot_bgcolor="rgba(0,0,0,0)",
-                paper_bgcolor="rgba(0,0,0,0)",
-                height=350,
-                yaxis=dict(autorange="reversed"),
-            )
-            st.plotly_chart(fig, use_container_width=True)
+            st.divider()
+            st.subheader("Model Performance")
+            perf_data = []
+            for ticker, r in valid.items():
+                pred           = r["prediction"]
+                raw_conf       = pred.get("raw_confidence", pred["confidence"])
+                beats_baseline = r["model_accuracy"] > r["baseline_accuracy"]
+                perf_data.append({
+                    "Ticker":           ticker,
+                    "Current Price":    f"${r['current_price']}",
+                    "Price Change":     f"{r['price_change_pct']:+.2f}%",
+                    "Prediction":       pred["direction"],
+                    "Signal":           pred["signal"],
+                    "Confidence (adj)": f"{pred['confidence']:.0f}%",
+                    "Confidence (raw)": f"{raw_conf:.0f}%",
+                    "Model Accuracy":   f"{r['model_accuracy']}%",
+                    "Baseline":         f"{r['baseline_accuracy']}%",
+                    "Beats Baseline":   "✓" if beats_baseline else "✗",
+                    "Regime":           r.get("regime", {}).get("regime", "N/A"),
+                })
+            if perf_data:
+                st.dataframe(pd.DataFrame(perf_data), use_container_width=True)
 
-        # Error messages for failed tickers
+            st.divider()
+            st.subheader("Feature Importance")
+            ticker_sel = st.selectbox("Select ticker", list(valid.keys()), key="feat_ticker")
+            if ticker_sel:
+                imp   = valid[ticker_sel]["feature_importance"]
+                top10 = dict(list(imp.items())[:10])
+                fig   = go.Figure(go.Bar(
+                    x=list(top10.values()), y=list(top10.keys()),
+                    orientation="h", marker_color="#2E75B6",
+                ))
+                fig.update_layout(
+                    xaxis_title="Importance", plot_bgcolor="rgba(0,0,0,0)",
+                    paper_bgcolor="rgba(0,0,0,0)", height=350,
+                    yaxis=dict(autorange="reversed"),
+                )
+                st.plotly_chart(fig, use_container_width=True)
+
         errors = {k: v for k, v in results.items() if "error" in v}
         if errors:
             st.divider()
             for ticker, r in errors.items():
                 st.warning(f"{ticker}: {r['error']}")
+
+
 
 
 # ── Watchlist & Alerts ────────────────────────
