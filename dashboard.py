@@ -505,28 +505,58 @@ elif page == "Screener":
 
     st.info("The screener scans hundreds of stocks and surfaces the ones with the strongest technical BUY signals — no need to know the ticker first.")
 
+    st.markdown("""
+    **How the screener works:** It scans every stock in the universe and scores them on technical signals.
+    Lower RSI = more oversold (potential bounce). Higher score = stronger combined signal.
+    The top candidates are ranked by score for you to investigate further.
+    """)
+    st.caption("💡 **Tip:** Start with RSI 55, SMA20 unchecked, and Dow Jones 30 to see how the screener works. Then tighten filters once you understand the results.")
+    st.divider()
+
     col1, col2, col3 = st.columns(3)
     with col1:
         universe = st.selectbox(
             "Universe",
             options=["Dow Jones 30", "NASDAQ 100", "S&P 500 (100 stocks)"],
             index=0,
-            help="Which group of stocks to scan"
+            help="Dow Jones 30 is fastest (30 stocks). S&P 500 scans 100 stocks and takes 2-3 minutes."
         )
     with col2:
-        max_rsi = st.slider("Max RSI (oversold threshold)", min_value=25, max_value=60, value=45,
-            help="Only show stocks with RSI below this — lower RSI = more oversold = potential bounce")
+        max_rsi = st.slider(
+            "Max RSI",
+            min_value=25, max_value=70, value=55,
+            help="RSI measures momentum 0-100. Below 30 = very oversold. Below 45 = moderately oversold. Above 70 = overbought. Raise this to get more results."
+        )
     with col3:
-        max_results = st.slider("Max results", min_value=5, max_value=30, value=15)
+        max_results = st.slider(
+            "Max results",
+            min_value=5, max_value=30, value=15,
+            help="How many stocks to show in the results. The screener ranks all passing stocks by score and shows the top N. 15 is a good starting point."
+        )
 
     col4, col5 = st.columns(2)
     with col4:
-        require_above_sma20 = st.checkbox("Must be above SMA20 (uptrend)", value=True)
-        require_macd_bullish = st.checkbox("Must have bullish MACD", value=False)
+        require_above_sma20 = st.checkbox(
+            "Must be above SMA20 (uptrend)",
+            value=False,
+            help="SMA20 is the 20-day average price. Being above it suggests an uptrend. WARNING: This conflicts with low RSI — oversold stocks are often below their SMA20. Uncheck this to get more results."
+        )
+        require_macd_bullish = st.checkbox(
+            "Must have bullish MACD",
+            value=False,
+            help="MACD bullish means the fast momentum line is above the slow signal line — suggests upward momentum. This is an additional filter that reduces results significantly. Leave unchecked for a wider search."
+        )
     with col5:
-        min_price = st.number_input("Min price ($)", value=5.0, step=1.0)
-        min_volume_ratio = st.slider("Min volume ratio", min_value=0.1, max_value=2.0, value=0.5, step=0.1,
-            help="Volume must be at least this times the 20-day average")
+        min_price = st.number_input(
+            "Min price ($)",
+            value=5.0, step=1.0,
+            help="Filters out very cheap penny stocks which can be volatile and illiquid. $5 is a sensible minimum."
+        )
+        min_volume_ratio = st.slider(
+            "Min volume ratio",
+            min_value=0.1, max_value=2.0, value=0.3, step=0.1,
+            help="Compares today's volume to the 20-day average. 1.0 = average volume. 0.3 means at least 30% of normal volume. Lower this to get more results."
+        )
 
     if st.button("🔍  Run Screen", type="primary"):
         criteria = {
