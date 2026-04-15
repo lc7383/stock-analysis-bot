@@ -28,6 +28,12 @@ from datetime import datetime
 import streamlit as st
 from anthropic import Anthropic
 
+try:
+    from earnings_calendar import earnings_prompt_block
+    EARNINGS_AVAILABLE = True
+except ImportError:
+    EARNINGS_AVAILABLE = False
+
 # ── Constants ──────────────────────────────────────────────────────────────
 REPORTS_DIR   = Path("reports")
 MODEL         = "claude-sonnet-4-20250514"
@@ -109,6 +115,14 @@ def build_system_prompt(watchlist: list[str]) -> str:
             ticks = ", ".join(e.get("tickers", []))
             history_summary += f"  • {ts}: {ticks}\n"
 
+    # Earnings calendar context
+    earnings_block = ""
+    if EARNINGS_AVAILABLE and watchlist:
+        try:
+            earnings_block = earnings_prompt_block(watchlist)
+        except Exception:
+            earnings_block = ""
+
     return f"""You are StockMind, an expert AI stock analyst embedded in a Streamlit stock analysis dashboard.
 
 USER'S WATCHLIST: {watchlist_str}
@@ -118,6 +132,8 @@ USER'S WATCHLIST: {watchlist_str}
 
 === RUN HISTORY ===
 {history_summary or "No history available yet."}
+
+{earnings_block}
 
 === BOT CAPABILITIES ===
 The bot collects and analyzes:
